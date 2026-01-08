@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Author: Mario Scondo (www.Linux-Support.com)
 # Date: 2010-01-08
 # Script template by Stephen Chappell
@@ -18,26 +19,35 @@
 
 import socket
 import sys
-import _thread as thread
 import time
+import threading
 
 
+def start_new_thread(func, param):
+  x = threading.Thread(target=func, args=param)
+  x.start()
+  return x
+  
 def main(setup, error, args):
     # open file for error messages
     with open(error, 'a') as error_file:
         sys.stderr = error_file
 
     # if args
-    if len(args) > 0:
+    if (len(args) > 0):
         for settings in parse_args(args):
-            thread.start_new_thread(server, settings)
+            start_new_thread(server, settings)
     else:
         # read settings for port forwarding
         for settings in parse(setup):
-            thread.start_new_thread(server, settings)
+            start_new_thread(server, settings)
     # wait for <ctrl-c>
     while True:
        time.sleep(60)
+
+def file(fname):
+  with open(fname,'r') as f:
+    yield f.readline()
 
 def parse(setup):
     settings = list()
@@ -59,28 +69,40 @@ def parse_args(args):
     return settings
 
 def server(*settings):
+    print(settings)
     try:
         dock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        dock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         dock_socket.bind(('', settings[0]))
         dock_socket.listen(5)
         while True:
             client_socket = dock_socket.accept()[0]
             server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             server_socket.connect((settings[1], settings[2]))
-            thread.start_new_thread(forward, (client_socket, server_socket))
-            thread.start_new_thread(forward, (server_socket, client_socket))
+            start_new_thread(forward, (client_socket, server_socket))
+            start_new_thread(forward, (server_socket, client_socket))
+    except Exception  as e:
+        print(round(time.time(),3),e)
+        time.sleep(2)
     finally:
-        thread.start_new_thread(server, settings)
+        start_new_thread(server, settings)
 
 def forward(source, destination):
     string = ' '
-    while string:
-        string = source.recv(1024)
-        if string:
-            destination.sendall(string)
-        else:
-            source.shutdown(socket.SHUT_RD)
-            destination.shutdown(socket.SHUT_WR)
+    
+    try:
+        while string:
+            string = source.recv(1024)
+            if string:
+                destination.sendall(string)
+            else:
+                source.shutdown(socket.SHUT_RD)
+                destination.shutdown(socket.SHUT_WR)
+    except Exception as e:
+        print(e)
+    finally:
+        source.shutdown(socket.SHUT_RD)
+        destination.shutdown(socket.SHUT_WR)
 
 if __name__ == '__main__':
     if sys.version_info[0] < 3:
